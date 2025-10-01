@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>開啟 App</title>
+
+  <!-- iOS Smart App Banner（可選，但強烈建議）-->
+  <!-- 將 app-id 換成你的 App Store ID；arguments 可帶你的深連結參數 -->
+  <meta name="apple-itunes-app" content="app-id=1234567890, app-argument=https://YOUR_DOMAIN/Page">
+
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+      background: #f7f7f8;
+      color: #111;
+    }
+    .wrap {
+      min-height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      padding: 28px;
+      text-align: center;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 12px;
+    }
+    p {
+      margin: 0 0 20px;
+      line-height: 1.6;
+      color: #444;
+    }
+    .btns {
+      display: grid;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 16px;
+      border-radius: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid #e6e6e6;
+      background: #fafafa;
+      transition: transform .06s ease, box-shadow .12s ease, background .12s ease;
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(0,0,0,.06); background: #fff; }
+    .btn:active { transform: translateY(0); box-shadow: none; }
+    .btn.primary { border-color: #e0e7ff; background: #eef2ff; }
+    .muted { color: #666; font-size: 13px; margin-top: 12px; }
+    .hidden { display: none; }
+
+    /* 「開啟 App」手動按鈕（可見但次要） */
+    .open-app {
+      margin-top: 8px;
+      font-size: 14px;
+      color: #2b50ff;
+      text-decoration: underline;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 6px 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>正在嘗試開啟 App…</h1>
+      <p class="muted" id="status">若未自動開啟，將顯示下載選項</p>
+
+      <!-- 手動「開啟 App」按鈕（在某些瀏覽器需要使用者手勢）-->
+      <button class="open-app" id="manualOpen">改用按鈕開啟 App</button>
+
+      <!-- Fallback：未安裝 App 時顯示 -->
+      <div id="fallback" class="hidden">
+        <p>看起來你尚未安裝 App，請選擇裝置平台下載：</p>
+        <div class="btns">
+          <!-- 以 iOS 為主 -->
+          <a id="iosStoreBtn" class="btn primary" href="#" rel="noopener">前往 App Store 下載（iOS）</a>
+          <a id="androidStoreBtn" class="btn" href="#" rel="noopener">前往 Google Play 下載（Android）</a>
+        </div>
+        <p class="muted">已安裝？請回到本頁再試一次，或點上方「改用按鈕開啟 App」。</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * ======= 請依照你的設定修改以下區塊 =======
+     */
+    const CONFIG = {
+      // 你的 Universal Link 網域（和 AASA 對應）
+      DOMAIN: 'https://YOUR_DOMAIN', // 例如：https://username.github.io 或你的自訂網域
+
+      // 自家 App 的自訂 URL Scheme（建議設定，作為 Universal Link 以外的保險）
+      IOS_CUSTOM_SCHEME: 'myapp://page',       // iOS：例如 myapp://page?foo=bar
+      ANDROID_CUSTOM_SCHEME: 'myapp://page',   // Android（若同一個 scheme）
+
+      // Android Intent 用法（Chrome 推薦）：會自動帶你到 App 或回退到瀏覽器 fallback
+      ANDROID_INTENT: 'intent://page#Intent;scheme=myapp;package=com.example.myapp;S.browser_fallback_url=https%3A%2F%2FYOUR_DOMAIN%2FPage;end',
+
+      // 下載連結（請替換）
+      IOS_APP_STORE: 'https://apps.apple.com/app/id1234567890',
+      ANDROID_PLAY_STORE: 'https://play.google.com/store/apps/details?id=com.example.myapp',
+
+      // 是否在載入頁面時自動嘗試開啟 App
+      AUTO_TRY_OPEN: true,
+
+      // 自動嘗試開啟的逾時計時（毫秒），逾時後顯示下載按鈕
+      OPEN_TIMEOUT_MS: 1500
+    };
+
+    // 依目前 URL 附帶參數，拼出你要交給 App 的 path/query（可依需求加強）
+    function buildDeepLinkPath() {
+      // 例如：把 /Page 後面的路徑/參數帶進 App
+      const url = new URL(window.location.href);
+      const afterPage = url.pathname.replace(/^\/?Page\/?/, ''); // "123?x=1" 之類
+      const query = url.search || '';
+      const hash = url.hash || '';
+      const suffix = [afterPage, query, hash].filter(Boolean).join('');
+      return suffix ? `/${suffix}` : '';
+    }
+
+    function isiOS() { return /iPad|iPhone|iPod/i.test(navigator.userAgent); }
+    function isAndroid() { return /Android/i.test(navigator.userAgent); }
+
+    function showFallback() {
+      document.getElementById('fallback').classList.remove('hidden');
+      document.getElementById('status').textContent = '未能自動開啟 App。';
+    }
+
+    function tryOpenAppByScheme() {
+      // iOS：以 location 跳 scheme；Android：以 intent（Chrome）或隱藏 iframe（其他）
+      const path = buildDeepLinkPath();
+
+      if (isAndroid()) {
+        // 優先使用 Intent（Chrome）
+        try {
+          window.location.href = CONFIG.ANDROID_INTENT;
+          return;
+        } catch (e) {
+          // 後備：以隱藏 iframe 嘗試 scheme
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = CONFIG.ANDROID_CUSTOM_SCHEME + path;
+          document.body.appendChild(iframe);
+        }
+      } else if (isiOS()) {
+        // iOS：直接導向自訂 scheme（部分版本/瀏覽器需要手勢觸發）
+        window.location.href = CONFIG.IOS_CUSTOM_SCHEME + path;
+      } else {
+        // 其他平台：不嘗試，直接顯示 fallback
+        showFallback();
+      }
+    }
+
+    function autoFlow() {
+      // 注意：Universal Link 本質上最好透過使用者點擊「真正的 https 連結」觸發；
+      // 這裡做的是「自動」嘗試打開（以自訂 scheme/intent），並在逾時後顯示按鈕。
+      let revealed = false;
+      const timer = setTimeout(() => {
+        if (!revealed) {
+          revealed = true;
+          showFallback();
+        }
+      }, CONFIG.OPEN_TIMEOUT_MS);
+
+      // 嘗試開啟 App
+      tryOpenAppByScheme();
+
+      // 有些瀏覽器會在成功開啟 App 後凍結頁面；若未凍結，仍會跑到這裡，等逾時顯示 fallback。
+      // 若確定要「永不自動顯示 fallback」，可移除上方計時器。
+    }
+
+    // 綁定 UI
+    (function init() {
+      // 設定下載按鈕連結
+      document.getElementById('iosStoreBtn').href = CONFIG.IOS_APP_STORE;
+      document.getElementById('androidStoreBtn').href = CONFIG.ANDROID_PLAY_STORE;
+
+      // 手動開啟 App（提供使用者手勢，提升 iOS/Safari 成功率）
+      document.getElementById('manualOpen').addEventListener('click', function () {
+        tryOpenAppByScheme();
+        // 再啟一個較短的逾時（手動點擊通常更容易成功）
+        setTimeout(showFallback, 1200);
+      });
+
+      if (CONFIG.AUTO_TRY_OPEN) {
+        autoFlow();
+      } else {
+        // 若不自動嘗試，直接顯示 fallback
+        showFallback();
+      }
+    })();
+  </script>
+</body>
+</html>
