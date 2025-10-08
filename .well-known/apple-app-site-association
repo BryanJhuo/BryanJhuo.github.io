@@ -4,7 +4,7 @@
     "details": [
       {
         "appID": "95E44WWFM7.com.softmobile.1MS20M",
-        "paths": [ "/Page", "/Page/*" ]
+        "paths": [ "/Page", "/Page/", "/Page/*"]
       }
     ]
   }
